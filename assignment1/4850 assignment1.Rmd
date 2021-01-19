@@ -1,0 +1,471 @@
+---
+title: "4850assignment1"
+author: "Yufei xia"
+date: "2020/2/18"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+theta1 = numeric(0)
+theta2 = numeric(0)
+
+simulate = function(sigma_sq){
+beta0 = 1 
+beta1 = 1 
+x =rnorm(1000,4,1)
+y = beta0 + beta1*x + rnorm(1000,0,sqrt(sigma_sq))
+xstar = x + rnorm(1000,0,sigma_sq)
+model2 = lm(y~xstar)
+model1 = lm(y~x)
+return(c(summary(model1)$coefficients[2,1]-1,summary(model2)$coefficients[2,1]-1))
+}
+
+sigma = c(0.15,0.55,0.75)
+
+sigma1= replicate(n = 1000, simulate(0.15))
+print("the bias for beta1 and beta2 when varience = 0.15")
+apply(sigma1,1,mean)
+print("the varience for beta1 and beta2 when varience = 0.15")
+apply(sigma1,1,var)
+sigma1= replicate(n = 1000, simulate(0.55))
+print("the bias for beta1 and beta2 when varience = 0.55")
+apply(sigma1,1,mean)
+print("the varience for beta1 and beta2 when varience = 0.55")
+apply(sigma1,1,var)
+sigma1= replicate(n = 1000, simulate(0.75))
+print("the bias for beta1 and beta2 when varience = 0.75")
+apply(sigma1,1,mean)
+print("the varience for beta1 and beta2 when varience = 0.75")
+apply(sigma1,1,var)
+
+
+
+
+
+#result = apply(m,1,mean)
+#print(result)
+```
+from the result we can see the bias for beta1 doesn't grow as the sigma increase, however, the bias for 
+second beta become bigger as the sigma go up, which prove our part b, w2 is not equal to 1 and decrease as sigma increase. in term of the varience of beta1 and beta2, we know that they are increase as sigma go up. which satisfy with the formula we calculated in the partc.also the varience is equal calculated in part 3.
+
+
+question4 
+part1
+```{r}
+wool = read.csv("wool.txt",sep = "")
+model_fit = lm("yt~xt",data = wool)
+model_fit2 = lm("yt~poly(xt,10)",data = wool)
+plot(wool$xt,wool$yt)
+lines(wool$xt,predict(model_fit),col = "red")
+lines(wool$xt,predict(model_fit2),col = "blue")
+legend(1,0.48,legend=c("simple fit", "polynomial fit"),col=c("red", "blue"),lty=1:2, cex=0.8)
+```
+
+
+
+
+part2
+```{r}
+wool
+llg_normal = function(data,x,h){
+  train_x = as.numeric(data[,1])
+  train_y = as.numeric(data[,2])
+  vx = train_x-x
+  w = as.numeric(dnorm(vx,0,h))
+  weight = w/sum(w)
+  oldw =getOption("warn")
+  options(warn = -1)
+  fit = lm(train_y ~ vx,weights = weight)
+  options(warn = oldw)
+  response = fit$coef[1]
+  as.numeric(response)
+  }
+
+
+leave_out_normal = function(i,data,h){
+  xi = data[i,1]
+  newdata = data[-i,]
+  yi = data[i,2]
+  response = llg_normal(newdata,xi,h)
+  c(yi,response)
+}
+
+cv.glm_normal  =function(data,h){
+  index = as.matrix(1:nrow(data))
+  output = apply(index,1,leave_out_normal,data =data,h=h)
+  output<-t(output)
+  error = sum((output[,1]-output[,2])^2)
+  error
+  }
+
+
+cvglm_linear_normal = function(data,interval){
+  optimize(cv.glm_normal,interval = interval,data = data)$minimum
+}
+
+optmized_bindwith_linear = cvglm_linear_normal(wool,c(0,length(wool[,1])))
+print("the optimized bindwith is for linear fit is")
+optmized_bindwith_linear
+
+
+response_linear= NULL
+
+for (i in 1:length(wool[,1]) ){
+  response_linear[i] = llg_normal(wool,wool[i,1],optmized_bindwith_linear)
+}
+
+
+linear_data = cbind(wool[,1],response_linear)
+linear_data = linear_data[order(linear_data[,1]),]
+
+
+```
+(1)
+```{r}
+
+llg_normal_const = function(data,x,h){
+  train_x = as.numeric(data[,1])
+  train_y = as.numeric(data[,2])
+  vx = train_x-x
+  w = as.numeric(dnorm(vx,0,h))
+  weight = w/sum(w)
+  oldw =getOption("warn")
+  options(warn = -1)
+  fit = lm(train_y ~ 1,weights = weight)
+  options(warn = oldw)
+  response = fit$coef[1]
+  as.numeric(response)
+  }
+
+
+leave_out_normal_const = function(i,data,h){
+  xi = data[i,1]
+  newdata = data[-i,]
+  yi = data[i,2]
+  response = llg_normal_const(newdata,xi,h)
+  c(yi,response)
+}
+cv.glm_normal_const =function(data,h){
+  index = as.matrix(1:nrow(data))
+  output = apply(index,1,leave_out_normal_const,data =data,h=h)
+  output<-t(output)
+  error = sum((output[,1]-output[,2])^2)
+  error
+  }
+cvglm_linear_normal_const = function(data,interval){
+  optimize(cv.glm_normal_const,interval = interval,data = data)$minimum
+}
+optmized_bindwith_const = cvglm_linear_normal_const(wool,c(0,length(wool[,1])))
+print("the optimized bindwith is for constant fit is ")
+optmized_bindwith_const
+response_const= NULL
+for (i in 1:length(wool[,1]) ){
+  response_const[i] = llg_normal_const(wool,wool[i,1],optmized_bindwith_const)
+}
+
+const_data = cbind(wool[,1],response_const)
+const_data = const_data[order(const_data[,1]),]
+
+```
+
+```{r}
+plot(x = wool[,1],y=wool[,2],xlab="weeks",ylab ="log price difference")
+lines(const_data[,1],const_data[,2],col="2")
+lines(linear_data[,1],linear_data[,2],col="3")
+legend(10,0.45,c("local constant fucntion","local linear funciton"),col=c(2,3),lty =c(1,1))
+
+
+```
+
+(3)
+```{r}
+plot(wool$xt, wool$yt)
+h <- dpill(wool$xt, wool$yt)
+plugin_fit <- locpoly(wool$xt, wool$yt, bandwidth = h,degree = 1)
+lines(plugin_fit,col="2")
+linear_fit<- locpoly(wool$xt, wool$yt, bandwidth = optmized_bindwith_linear,degree = 1)
+lines(linear_fit,col="3")
+legend(10,0.45,c("local linear fucntion","plug in funciton"),col=c(2,3),lty =c(1,1))
+
+
+```
+
+```{r}
+predy =list(predict(model_fit),predict(model_fit2),response_const,response_linear,plugin_fit$y)
+sapply(predy,function(x){sum((x-wool[,2])^2)})
+
+```
+we can see that from the result we get, the local constant estimator sum of square error is 0.0042645,which is lowest. and also the plug in method has largest SSE.also as we predicted,the more degree you have, the less SSE for training data,we polynomial fit has less SSE. also we can see that the local constant estimator has less SSE than local linear estimator.
+
+```{r}
+ky = read.csv("kyphosis.txt",sep ="")
+newda = cbind(ky["age"],ifelse(ky["kyphosis"]=="absent",0,1))
+library("KernSmooth")
+library("locpol")
+llg = function(data,x,h){
+  train_x = as.numeric(data[,1])
+  train_y = as.numeric(data[,2])
+  vx = train_x-x
+  w = as.numeric(dnorm(vx,0,h))
+  weight = w/sum(w)
+  oldw =getOption("warn")
+  options(warn = -1)
+  fit = glm(train_y ~ vx,family = binomial(link=logit),weights = weight)
+  options(warn = oldw)
+  beta0 = fit$coef[1]
+  p = exp(beta0)/(1+exp(beta0))
+  as.numeric(p)
+  }
+
+
+leave_out = function(i,data,h){
+  xi = data[i,1]
+  newdata = data[-i,]
+  yi = data[i,2]
+  fit = llg(newdata,xi,h)
+  c(yi,fit)
+}
+
+cv.glm  =function(data,h){
+  index = as.matrix(1:nrow(data))
+  output = apply(index,1,leave_out,data =data,h=h)
+  output<-t(output)
+  error = -sum(output[,1]*log(output[,2])+(1-output[,1])*log(1-output[,2]))
+  error
+  }
+
+
+cvglm_linear = function(data,interval){
+  optimize(cv.glm,interval = interval,data = data)$minimum
+}
+
+
+bindwith_linear = cvglm_linear(newda,c(0,81))
+bindwith_linear
+
+
+
+```
+
+
+```{r}
+prob_est_linear = NULL
+
+for (i in 1:length(newda[,1]) ){
+  prob_est_linear[i] = llg(newda,newda[i,1],bindwith_linear)
+}
+
+prob_est_linear 
+
+```
+
+```{r}
+cvglm_const = function(data,interval){
+optimize(cv.glm_const,interval = interval,data = data)$minimum
+}
+
+ lc = function(data,x,h){
+  train_x = as.numeric(data[,1])
+  train_y = as.numeric(data[,2])
+  vx = train_x-x
+  w = as.numeric(dnorm(vx,0,h))
+  weight = w/sum(w)
+  oldw =getOption("warn")
+  options(warn = -1)
+  fit = glm(train_y ~ 1,family = binomial(link=logit),weights = weight)
+  options(warn = oldw)
+  beta0 = fit$coef[1]
+  p = exp(beta0)/(1+exp(beta0))
+  as.numeric(p)
+  }
+
+
+leave_out_const = function(i,data,h){
+  xi = data[i,1]
+  newdata = data[-i,]
+  yi = data[i,2]
+  fit = lc(newdata,xi,h)
+  c(yi,fit)
+}
+
+cv.glm_const  =function(data,h){
+  index = as.matrix(1:nrow(data))
+  output = apply(index,1,leave_out_const,data =data,h=h)
+  output<-t(output)
+  error = -sum(output[,1]*log(output[,2])+(1-output[,1])*log(1-output[,2]))
+  error
+  }
+  
+
+bindwith_const = cvglm_const(newda,c(0,81))
+bindwith_const
+```
+
+
+```{r}
+prob_est_const = NULL
+
+for (i in 1:length(newda[,1]) ){
+  prob_est_const[i] = llg(newda,newda[i,1],bindwith_const)
+}
+
+prob_est_const 
+
+```
+
+
+
+```{r}
+#assume it is linear function bew
+#so we have
+fit = glm(newda[,2]~newda[,1],family = binomial)
+plot(newda[,1],newda[,2],xlab ="age in weeks", ylab ="probality")
+prob = function(t){
+  exp(fit$coef[1]+fit$coef[2]*t)/(1+exp(fit$coef[1]+fit$coef[2]*t))
+}
+
+
+model_linear = cbind(newda[,1],prob_est_linear)
+model_linear = model_linear[order(model_linear[,1]),]
+model_const = cbind(newda[,1],prob_est_const)
+model_const = model_const[order(model_const[,1]),]
+lines(newda[,1],prob(newda[,1]),col ="2",lty =1)
+lines(model_linear[,1],model_linear[,2],col ="3",lty =2 )
+lines(model_const[,1],model_const[,2],col="4",lty =3)
+legend(130,0.9,c("linear fucntion","local linear funciton","local constant function"),col=c(2,3,4),lty =c(1,2,3))
+#we can get that the plot is not likely to be linear 
+
+
+```
+from the plot we get, apprantly the linear assumption for f(x) is not reasonable beacause the plot doesn't follow the same pattern for linear function and local function. 
+
+question 6
+(2)
+```{r}
+crab = read.csv("crab.txt",sep ="")
+crab
+llg_pos = function(data,x,h){
+  train_x = as.numeric(data[,1])
+  train_y = as.numeric(data[,2])
+  vx = train_x-x
+  w = as.numeric(dnorm(vx,0,h))
+  weight = w/sum(w)
+  oldw =getOption("warn")
+  options(warn = -1)
+  fit = glm(train_y ~ vx,family = poisson(link = "log"),weights = weight)
+  options(warn = oldw)
+  sigma = exp(fit$coef[1])
+  as.numeric(sigma)
+  }
+
+
+leave_out_pos = function(i,data,h){
+  xi = data[i,1]
+  newdata = data[-i,]
+  yi = data[i,2]
+  sigma = llg_pos(newdata,xi,h)
+  c(yi,sigma)
+}
+
+cv.glm_pos  =function(data,h){
+  index = as.matrix(1:nrow(data))
+  output = apply(index,1,leave_out_pos,data =data,h=h)
+  output<-t(output)
+  error = -sum(output[,1]*log(output[,2])-output[,2])
+  error
+  }
+
+cvglm_linear_pos = function(data,interval){
+  optimize(cv.glm_pos,interval = interval,data = data)$minimum
+}  
+pos_bindwith = cvglm_linear_pos(crab,interval = c(0,length(crab[,1])))
+print("the optimized bw is")
+pos_bindwith
+POS_LINEAR =NULL
+for(i in 1:length(crab[,1])){
+POS_LINEAR[i] = llg_pos(crab,crab[i,1],pos_bindwith)
+}
+print("the predicted mu is")
+POS_LINEAR
+pos_linear_data = cbind(crab$x,POS_LINEAR)
+pos_linear_data = pos_linear_data[order(pos_linear_data[,1]),]
+
+
+```
+
+```{r}
+llg_pos_const = function(data,x,h){
+  train_x = as.numeric(data[,1])
+  train_y = as.numeric(data[,2])
+  vx = train_x-x
+  w = as.numeric(dnorm(vx,0,h))
+  weight = w/sum(w)
+  oldw =getOption("warn")
+  options(warn = -1)
+  fit = glm(train_y ~ 1,family = poisson(link = "log"),weights = weight)
+  options(warn = oldw)
+  sigma = exp(fit$coef[1])
+  as.numeric(sigma)
+  }
+
+
+leave_out_pos_const = function(i,data,h){
+  xi = data[i,1]
+  newdata = data[-i,]
+  yi = data[i,2]
+  sigma = llg_pos_const(newdata,xi,h)
+  c(yi,sigma)
+}
+
+cv.glm_pos_const  =function(data,h){
+  index = as.matrix(1:nrow(data))
+  output = apply(index,1,leave_out_pos_const,data =data,h=h)
+  output<-t(output)
+  error = -sum(output[,1]*log(output[,2])-output[,2])
+  error
+  }
+
+cvglm_linear_pos_const = function(data,interval){
+  optimize(cv.glm_pos_const,interval = interval,data = data)$minimum
+}  
+print("the optimized bw is")
+pos_bindwith_const = cvglm_linear_pos_const(crab,interval = c(0,length(crab[,1])))
+print("the predicted mu is")
+POS_CONST =NULL
+for(i in 1:length(crab[,1])){
+POS_CONST[i] = llg_pos_const(crab,crab[i,1],pos_bindwith_const)
+}
+POS_CONST
+pos_bindwith_const
+pos_const_data = cbind(crab$x,POS_CONST)
+pos_const_data = pos_const_data[order(pos_const_data[,1]),]
+```
+
+
+question3
+```{r}
+fit = glm(crab[,2]~crab[,1],family =poisson(link = "log"))
+plot(crab[,1],crab[,2],xlab ="width",ylab ="number of sitelites")
+prob2 = function(t){
+  exp(fit$coef[1]+fit$coef[2]*t)
+}
+normal_possion_regression = cbind(crab[,1],prob2(crab[,1]))
+normal_possion_regression = normal_possion_regression[order(normal_possion_regression[,1]),]
+lines(normal_possion_regression[,1],normal_possion_regression[,2],col ="2",lty =1)
+lines(pos_const_data[,1],pos_const_data[,2],col ="4",lty =3 )
+lines(pos_linear_data[,1],pos_linear_data[,2],col ="3",lty = 2)
+legend(29,15,c("linear fucntion","local linear funciton","local constant function"),col=c(2,3,4),lty=c(1,2,3))
+```
+the assumption is reasonable because overall, those three lines show same pattern except some distortion on the right side.
+
+
+
+
+
+
