@@ -1,0 +1,357 @@
+---
+title: "4850assignment2"
+author: "Yufei xia"
+date: "2020/3/25"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(nnet)
+library(MASS) 
+library(e1071)
+library(SIS)
+library(glmnet)
+library(glasso)
+library(XMRF)
+
+```
+
+#first we read the table from wine.txt and get the basic structure and first 5 row 
+```{r}
+wine_data = read.table("wine.txt",header =T)
+str(wine_data)
+#remove the ID and turn numeric into factor.
+wine_data =subset(wine_data,select = -Subjects)
+wine_data$Class  = as.factor(wine_data$Class)
+wine_true =wine_data$Class 
+```
+
+
+#(a)
+```{r}
+
+
+log_fit = multinom(Class~.,wine_data)
+multi_predict = factor(predict(log_fit))
+summary(log_fit)
+#write helper function to calculate the recall and precision.
+conf_matrix = function(true, pred){
+confusion_matrix = table(true,pred)
+TP = sapply(1:3,function(x)sum(pred == x&true==x))
+FP = sapply(1:3,function(x)sum(pred == x&true!=x))
+FN = sapply(1:3,function(x)sum(pred != x&true ==x))
+pre_macro = mean(TP/(TP+FP))
+rec_macro = mean(TP/(TP+FN))
+f_macro = 2*pre_macro*rec_macro/(rec_macro+pre_macro)
+result =list("confusion_matrix" = confusion_matrix,"recall_macro"=rec_macro,"precision_macro"=pre_macro,"F-measure"=f_macro)
+return(result)
+}
+result = conf_matrix(wine_true,multi_predict )
+result
+
+
+
+
+```
+from  the result we can see that through nominal logistic regression  the recall_macro is 1. means that the among all true class, they are all been predicted right. the macro precision is 1. means that predicted value for each class, all the them are turely belong to predicted calss. F score is 1,which means the model is perfectly classfied.
+
+```{r}
+lda_fit = lda(Class~.,wine_data)
+lda_pred = predict(lda_fit)$class
+conf_matrix(wine_true,lda_pred)
+qda_fit = qda(Class~.,wine_data)
+qda_pred = predict(qda_fit)$class
+conf_matrix(wine_true,qda_pred)
+```
+from  the result we can see that through LDA  the recall_macro is 1. means that the among all true class, they are all been predicted right. the macro precision is 1. means that predicted value for each class, all the them are turely belong to predicted calss. F score is 1,which means the model is perfectly classfied.
+from  the result we can see that through QDA the recall_macro is 0.995. means that the among all true class,almost 99.5% are predicted right. the macro precision is 0.9944. means that predicted value for each class, 99.4% the them are turely belong to predicted calss. F score is 0.9948,which means the model is almost perfect.
+
+#(c)
+```{r}
+svm_fit = svm(Class~.,wine_data)
+svm_predict = fitted(svm_fit)
+svm_result = conf_matrix(wine_true,svm_predict)
+svm_result
+```
+from  the result we can see that through SVM  the recall_macro is 1. means that the among all true class, they are all been predicted right. the macro precision is 1. means that predicted value for each class, all the them are turely belong to predicted calss. F score is 1,which means the model is perfectly classfied.
+
+#(d)
+from the first three questions, we can see that all the model fit perfectly well on dataset,except for the QDA. compared to LDA, the QDA use polynomial decision boundary instead of linear so we might derive intuitively that the original dataset is linearly seperated.
+however, we did't try for the test data. so we might encouter the overfiting problem. we should try to split the data into training and testing dataset.
+```{r}
+#we try to split the training and testings sample into 80% and 20%
+
+sample_size =floor(0.8*nrow(wine_data))
+set.seed(123)
+train_ind <- sample(seq_len(nrow(wine_data)), size = sample_size)
+train  = wine_data[train_ind,]
+test = wine_data[-train_ind,]
+newtest = subset(test,select = -c(Class))
+
+#let take svm as example to test overfitting 
+svm_fit = svm(Class~.,train)
+pred = predict(svm_fit,newtest)
+conf_matrix(test$Class,pred)
+
+
+```
+even it run perfectly on test set, so the model don't have overfitting.
+
+#question2
+#(b)
+```{r,echo=T, results='hide'}
+set.seed(111)
+rep = 10
+p = 1500
+n = 200
+rho =0.7
+mu = rep(0,p)
+beta = c(rep(1,4),-4*sqrt(rho),rep(0,p-5))
+sigma = matrix(rho,p,p)+diag(1-rho,p)
+sigma[5,]=sqrt(sigma[5,])
+sigma[,5]=sqrt(sigma[,5])
+sigma[5,5] =1 
+
+beta_SIS =NULL
+beta_SIS_iter = NULL
+for(i in 1:rep){
+X = mvrnorm(n,mu,sigma)
+e =rnorm(n,0,1)
+y = X%*%beta+e
+S = SIS(X,y,family="gaussian",iter =FALSE)$ix
+print(S)
+S_iter = SIS(X,y,family ="gaussian",tune = 'bic',varISIS = 'aggr',iter =T)$ix
+model_select = X[,S]
+model_select_iter = X[,S_iter]
+beta0=as.vector(solve(t(model_select)%*%model_select)%*%t(model_select)%*%y)
+beta_iter=as.vector(solve(t(model_select_iter)%*%model_select_iter)%*%t(model_select_iter)%*%y)
+
+betas = rep(0,1500)
+betas[S] = beta0
+betas_iter = rep(0,1500)
+betas_iter[S_iter] = beta_iter
+beta_SIS = rbind(beta_SIS,betas)
+beta_SIS_iter = rbind(beta_SIS_iter,betas_iter)
+}
+
+beta_estimator = apply(beta_SIS,2,mean)
+beta_estimator_iter = apply(beta_SIS_iter,2,mean)
+
+result = matrix(,0,4)
+getresult = function(beta_model,beta){
+      norm2 = sum((beta_model-beta)^2)
+      norm1 = sum(abs(beta_model-beta))
+      S = sum(beta_model!=0)
+      FN = sum(beta_model==0&beta!=0)
+    
+      #need to use<<-because it is global
+      result <<- rbind(result,c(norm1,norm2,S,FN))
+      
+}
+
+
+getresult(beta_estimator,beta)
+getresult(beta_estimator_iter,beta)
+rownames(result) =c("SIS","iterated SIS")
+colnames(result) = c("norm1","norm2","S","FN")
+result = data.frame(result)
+```
+
+
+
+```{r}
+result
+```
+from the table we can see the norm1 ,norm2,S and FN for SIS is both greater than iterated SIS.
+
+
+#(c)
+```{r,echo=T,results='hide'}
+set.seed(111)
+#initiate the parameter and generate the data from it
+rep = 10
+p = 40
+n = 200
+mu = rep(0,p)
+sigma = matrix(0,p,p)
+rho = 0.7
+beta = c(rep(1,4),-4*sqrt(rho),rep(0,p-5))
+for (i in 1:p){
+  for(j in 1:p){
+    sigma[i,j] = 0.5^abs(i-j)
+  }
+}
+
+beta_lasso_start = 0
+beta_apt_start = 0
+beta_elas_start = 0
+for (i in 1:rep){
+X = mvrnorm(n,mu,sigma,tol= 1e-6,empirical =FALSE,EISPACK = FALSE)
+e =rnorm(n,0,1)
+y = X%*%beta+e
+
+#set up the lasso regression
+lasso = glmnet(X,y,family = "gaussian",alpha =1)
+#calculate the penalty factor and set up the adpative lasso regression.
+beta1 = as.vector(solve(t(X)%*%X)%*%t(X)%*%y)
+weight = 1/abs(beta1)
+apt_lasso =glmnet(X,y,family = "gaussian",alpha = 1,penalty.factor = weight)
+#set up the elastic net regresion and set the alpha =0.5.
+elastic_net = glmnet(X,y,family = "gaussian",alpha =0.5)
+
+#we got the betas under the grids of lambda.
+lasso_beta = lasso$beta
+apt_beta = apt_lasso$beta
+elas_beta = elastic_net$beta
+elas_beta
+
+#build the BIC loss function and find the minimizer lambda for each model.
+BIC_lasso = deviance(lasso)+log(lasso$nobs)*lasso$df
+BIC_apt = deviance(apt_lasso)+log(apt_lasso$nobs)*apt_lasso$df
+BIC_elas = deviance(elastic_net)+log(elastic_net$nobs)*elastic_net$df
+
+lambda_lasso = which.min(BIC_lasso)
+lambda_apt = which.min(BIC_apt)
+lambda_elas = which.min(BIC_elas)
+
+beta_lasso = lasso_beta[,lambda_lasso]
+beta_apt =apt_beta[,lambda_apt]
+beta_elas = elas_beta[,lambda_elas]
+beta_lasso_start =beta_lasso_start+ beta_lasso
+beta_apt_start =beta_apt_start+ beta_apt
+beta_elas_start = beta_elas_start+beta_elas
+}
+beta_lasso_start =beta_lasso_start/rep
+beta_apt_start =beta_apt_start/rep
+beta_elas_start =beta_elas_start/rep
+
+result2 = matrix(,0,4)
+getresult = function(beta_model,beta){
+      norm2 = sum((beta_model-beta)^2)
+      norm1 = sum(abs(beta_model-beta))
+      S = sum(beta_model!=0)
+      FN = sum(beta_model==0&beta!=0)
+    
+      #need to use<<-because it is global
+      result2 <<- rbind(c(norm1,norm2,S,FN),result2)
+      
+}
+getresult(beta_lasso_start,beta)
+getresult(beta_apt_start,beta)
+getresult(beta_elas_start,beta)
+result2 = data.frame(result2[rev(seq_len(nrow(result2))), ])
+rownames(result2) =c("lasso","apt_lasso","elastic_net")
+colnames(result2) = c("norm1","norm2","S","FN")
+
+
+
+
+
+
+
+```
+
+
+```{r}
+result2
+```
+we can see that for FN, three method are equal to 0, but for norm1 ,norm2 and S
+we have elastic_net > lasso> apt_lasso.
+
+
+#(d)
+in the b part, we can see that norm1 ,norm2,S and FN for SIS is both greater than iterated SIS. FN is 1 for SIS, that means for one simulation, the SIS doesn't include the covariates that it should.also we can see that S for SIS is
+much greater than S for iterated SIS, which mean that it contain too much unnessary covariates for each iterations. which means that the covariates we calculated for each simulation is strongly biased. that is the reason why norm1
+and norm2 are much greater for SIS than iterated SIS.
+
+in the c part,we can see that for FN, three method are equal to 0, but for norm1 ,norm2 and S we have elastic_net > lasso> apt_lasso,which show the elastic_lasso has worest performance, and adapt lasso has best performance.
+FN is 0,which means that for each iteration, those three method contains all necesssary covariates. also, we can ituitively guess that because adapted lasso
+give the heavy pelnalty toward those estimated beta which close to 0. that force alots of 0 covariates unveil itself. however the elastic_net contain the 
+ridge part,so it will contain much non-zero covariates for each iteration.
+
+
+
+
+
+#question3 
+
+```{r,echo=T,results='hide'}
+set.seed(111)
+#set up the paratmers
+simulations = 10
+n = 400
+p = c(10,50)
+model =c("lattice","hub")
+method = c("glasso","inference")
+init = matrix(0,16,2)
+rho = c(0.001,0.01,0.1)
+for(h in 1:simulations){
+cha = matrix(,0,4)
+result = matrix(,0,2)
+for(i in 1:2){
+     for(j in 1:2){
+      sim = XMRF.Sim(n,p[i],model="GGM",graph = model[j])
+      theta =sim$B
+      X =sim$X
+      for(k in 1:2){
+        if(k ==1){
+        for (f in 1:3){
+          s = var(t(X)) 
+          theta_glasso = glasso(s,rho[f])$wi
+          theta_glasso = theta_glasso - diag(diag(theta_glasso),p[i],p[i])
+          spe = sum(theta_glasso==0&theta==0)/sum(theta==0)
+          sen = sum(theta_glasso!=0&theta!=0)/sum(theta!=0)
+          cha <<-rbind(cha,c(p[i],model[j],method[k],rho[f]))
+          result = rbind(result,c(sen,spe))
+          
+        }
+        }
+        else{
+          CI = XMRF(X,method ="GGM",stability = "star")
+          theta_ci = CI$network[[5]]
+          sen = sum(theta_ci==0&theta==0)/sum(theta==0)
+          spe = sum(theta_ci!=0&theta!=0)/sum(theta!=0)
+          cha <<-rbind(cha,c(p[i],model[j],method[k],"NONE"))
+          result = rbind(result,c(sen,spe))
+        }
+
+        
+      }
+      
+      
+     }
+     
+}
+init = init +result
+}
+#calculate the mean of sensitivity and specialty
+init = init/simulations
+newdf = data.frame(cha,init)
+
+
+
+colnames(newdf) = c("p","model","method","rho","sensitivity","speci")
+
+```
+
+```{r}
+newdf
+```
+from the table, we can see that for the sensitivity, almost all the groups are equal to 1, which means that  almost all of non-zero coeffcients are estimated to be non-zero.(all the edges are been detected). however for the specificity,
+we can see they vary a lot among different groups.we can do a boxplot first.
+
+```{r}
+par(mfrow =c(2,2))
+boxplot(speci~p, newdf)
+boxplot(speci~model, newdf)
+boxplot(speci~method, newdf)
+boxplot(speci~rho, newdf)
+```
+combined with the table and the boxplot, we can see that for different p, the p =50 turn to have higher specificity than p = 10 overall, but not too much.
+and for hub model turn to produce the higher specificity than lattice model overall. and also, the conditional inference method is significantly better than any glasso methods no matter what rho and model it choose. and also, for the glasso method, its performance improve as the rho improve,and close to 1 when rho = 0.1, which means that all the non-edge are correctly detected. and 
+the estimated graph is very close to real graph.
+
+
