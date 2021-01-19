@@ -1,0 +1,359 @@
+---
+title: "STAT 4850G/9850B FINAL PROJECT"
+author: Akila Balasubramaniam, Daniel Molson, Hwang Lee, Yanru Wang, Yufei Xia, and
+  Yumeng Chen
+date: "3/31/2020"
+output:
+  word_document: default
+  pdf_document:
+    latex_engine: xelatex
+header-includes: \usepackage{wrapfig} \usepackage{float} \floatplacement{figure}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message=FALSE)
+knitr::opts_chunk$set(fig.pos = 'H')
+library(readr)
+library(ggcorrplot)
+library(ggplot2)
+library(tidyverse)
+library(glmnet)
+library(nnet)
+library(e1071)
+library(xtable)
+library(MASS)
+library(caret)
+library(reshape2)
+```
+
+## Abstract 
+
+Credit cards have been a massive success over the years for many banks since almost every client of a bank holds a credit card. Due to this, credit cards have become an essential part of a bank's profits. Banks are interested in whether or not a client is likely to default on their credit card payments. Identifying risky and non-risky customers has been the interest of many banks for years.  In this paper, the factors that are needed to analyze the riskiness of a client will be determined. The article will also help banks to predict whether or not if a customer has the potential to repay the used credit of the bank by using various models. (the result was noted to be….)
+
+
+## Introduction
+
+When a client uses the credit-card issued to them by the bank, the bank expects the client to pay back their credit loan with interests. However, not all clients can pay back their loans. Some cardholders overuse the credit-card for consumption, which leads them into massive credit debt. This was the issue that was facing Taiwan in 2006, where debt from credit cards and other loans reached $268 billion US, and people were struggling to repay their loans^1^. The Taiwan media called people who were struggling to pay back their loans the "credit card slaves" as they were struggling to pay even the minimum balance on their credit card debt every month^1^. This issue resulted in significant societal problems such as debtors committing suicide because of the debtor. Some became homeless^1^. To prevent this, banks use client's information to decide whether they will default in their payments. Identifying risky and non-risky customers has been the interest of many banks for years. In this article, the dataset containing information on default payments of clients in Taiwan from April 2005 to September 2005 will be studied. This data would be used to analyze what factors place a role in why a client will default on their payment as well to predict whether or not a client will default with given information.
+
+There is an article by Cheng Yeh and Che-hui Lien, where the default payments in Taiwan were looked at and explored. In this article, six methods were looked at when analyzing the data; which are: K-nearest neighbor classifiers (KNN), Logistic regression (LR), Discriminant analysis (DA), Naive Bayesian classifier (NB), Artificial neural networks (ANNs) and Classification trees (CTs). Cheng Yeh and Che-hui Lien found that artificial neural networks achieve the best performance with relatively low error rate^2^. In the article by Cheng Yeh and Che-hui Lien, the classification method was run on all the variables. One way our paper differs from Cheng Yeh and Che-hui Lien is that we will first use variable selection methods to reduce the number of variables then use classification methods. We also saw that more customers don't default their payment in this data. This can be seen as an unbalance in the category in this data set. This needs to be considered when looking to see which model is better.  
+
+
+## Notation and Model
+
+The dataset consists of 30000 observations and 24 variables. All the variables and their description can be found in table 1. In this data set, we noticed that there were some unknown categories in some of the variables, such as education, marital status, etc. Instead of removing all the unknown data, we merged it with the other category. Since the response variable is either yes or no depending on whether or not a client default payment, therefore this is a classification study. So all the models that would be looked in this paper will be a classification of a binary variable.  We will be looking at ….model>>>  
+
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{| p{5.5cm}| p{10cm} |}
+\hline
+\textbf{Variable Name} & \textbf{Description} \\
+\hline
+X1: Amount of the given credit (NT dollar)   &   It includes both the individual consumer credit and his/her family (supplementary) credit \\ \hline
+X2: Gender                                   &   1 = male; 2 = female \\ \hline
+X3: Education                                &   1 = graduate school; 2 = university; 3 = high school; 4 = others \\ \hline
+X4: Marital status                           &   1 = married; 2 = single; 3 = others   \\ \hline
+X5: Age                                      &   Age in years  \\ \hline
+X6–X11: History of past payment (Tracked the history of payments for each clients’ monthly payment record from April to September, 2005.)       &   X6 = the repayment status in September 2005; X7 = the repayment status in August 2005; . . .; X11 = the repayment status in April, 2005. The measurement scale for the repayment status is: -1 = pay duly; 1 = payment delay for one month; 2 = payment delay for two months; . . .; 8 = payment delay for eight months; 9 = payment delay for nine months and above.   \\ \hline
+X12–X17: Amount of bill statement (NT dollar) &   X12 = amount of bill statement in September 2005; X13 = amount of bill statement in August 2005; . . .; X17 = amount of bill statement in April 2005. \\ \hline
+X18–X23: Amount of previous payment (NT dollar) & X18 = amount paid in September 2005; X19 = amount paid in August 2005; . . .; X23 = amount paid in April 2005. \\ \hline
+Y: Default payment                            & Yes = 1, No = 0 \\ \hline
+\end{tabular}
+\end{center}
+\caption{Variables that are found in the data and it's descriptions}
+\label{table2}
+\end{table} 
+
+
+
+First, we conducted an  exploratory data analysis by plotting various graphs. We started by plotting the correlation matrix and explored how different variables are correlated. This result can be seen in figure 1. As  seen in figure 1, some of the variables are highly correlated which can influence our analysis. It can be seen that the amount of bill statement payment for period one to period six are highly correlated. Whereas, the repayment amounts for different time periods are not strongly correlated. From this we think there might exist multicollinearity which can affect data analysis.
+
+
+
+```{r,warning=FALSE,include=FALSE}
+
+#df <- read_csv("C:/Users/user/Desktop/Fourth Year/SS 4850/Final Project/default of credit card clients.csv")
+df=read_csv("default of credit card clients.csv")
+# data clean up 
+dfm  = df
+df$MARRIAGE = ifelse(df$MARRIAGE == 0, 3, df$MARRIAGE)
+df$EDUCATION = ifelse(df$EDUCATION == 5, 4, df$EDUCATION)
+df$EDUCATION = ifelse(df$EDUCATION == 6, 4, df$EDUCATION)
+
+df$PAY_1 = ifelse(df$PAY_1 == -2, -1, df$PAY_1)
+df$PAY_1 = ifelse(df$PAY_1 == 0, -1, df$PAY_1)
+df$PAY_2 = ifelse(df$PAY_2 == 0, -1, df$PAY_2)
+df$PAY_2 = ifelse(df$PAY_2 == -2, -1, df$PAY_2)
+df$PAY_3 = ifelse(df$PAY_3 == 0, -1, df$PAY_3)
+df$PAY_3 = ifelse(df$PAY_3 == -2, -1, df$PAY_3)
+df$PAY_4 = ifelse(df$PAY_4 == -2, -1, df$PAY_4)
+df$PAY_4 = ifelse(df$PAY_4 == 0, -1, df$PAY_4)
+df$PAY_5 = ifelse(df$PAY_5 == 0, -1, df$PAY_5)
+df$PAY_5 = ifelse(df$PAY_5 == -2, -1, df$PAY_5)
+df$PAY_6 = ifelse(df$PAY_6 == 0, -1, df$PAY_6)
+df$PAY_6 = ifelse(df$PAY_6 == -2, -1, df$PAY_6)
+#get rid of ID
+df=df[,-1]
+
+
+df$MARRIAGE <-as.factor(df$MARRIAGE)
+df$SEX <-as.factor(df$SEX)
+df$EDUCATION <-as.factor(df$EDUCATION)
+df$dpnm<-as.factor(df$dpnm)
+dim(df)
+str(df)
+
+
+prop.table(table(df$dpnm))
+```
+
+```{r}
+str(df)
+```
+
+```{r, fig.cap = "Correlation matrix of numerical variables", echo = FALSE, fig.width=12, fig.height= 5.5, fig.pos = 'H'}
+r = cor(df[-c(2, 3, 4,6,7,8,9,10,11,24)])
+ggcorrplot(r)
+```
+from the correlation plot we can see that the amount of bill statement payment for period1,period2...period6
+are most highly correlated. followed by repayment status for different time period.
+so it might exsit the multicollinearity and will effect our futher data analyze. so we need lasso regression to reduce the highly correlated variables.
+
+```{r, include=FALSE}
+set.seed(123)
+sample_size <- floor(0.8 * nrow(df))
+
+## set the seed to make your partition reproducible
+train_index <- sample(seq_len(nrow(df)), size = sample_size)
+
+train <- df[train_index, ]
+test <- df[-train_index, ]
+x_test = subset(test,select = -c(dpnm))
+y_test = test$dpnm
+x_train = subset(train,select = -c(dpnm))
+y_train = train$dpnm
+```
+
+
+
+## Methodology
+
+#### Section 1: Variable Selection	
+To reduce multicollinearity and overfitting, we went through a variable selection process. We primarily used the cross-validation lasso regression. The Least Absolute Shrinkage and Selection Operator (LASSO)  is a method of variable selection that uses the penalization of the regression coefficients based on the value of a tuning parameter λ. In the cross-validated lasso regression, the penalty parameter λ is chosen using the K-fold cross-validation. This enables the lasso to automatically reduce the coefficients of irrelevant variables to zero. 
+Based on the selected variables from the cross-validation lasso, we aimed to further simplify the model by obtaining the best AIC. This was done through two different approaches: using glmulti package and stepwise variable selection. Glmulti is a R package for automated model selection based on information criteria. In this approach, only the main effects were used to build the candidate set because the interactions were already reduced through the cross-validation lasso. Stepwise variable selection is a method that repeatedly adds the most contributive predictors and removes variables that no longer improves the model fit.
+
+```{r}
+set.seed(111)
+y = df$dpnm
+x = model.matrix(dpnm~.,dfm)
+
+cv.out <- cv.glmnet(x,y,alpha=1,family="binomial",type.measure = "deviance" )
+plot(cv.out)
+
+lambda_min <- cv.out$lambda.min
+lambda_1se <- cv.out$lambda.1se
+coef(cv.out,s=lambda_1se)
+
+
+
+```
+through the lasso regression crossvalidtion, we find that we only left one variable for the  bill  payment amount(bill amount at time 1). so does the previous payment amount (payment amount at time 1)
+however we keep repayment status variables for different time period except for pay_6. besides this, LIMIT_BAL, MARRIAGE are also been selected. through lassso regression, we reduce some highly correlated variables.
+
+
+#### Section 2: Model Selection 
+
+##### Method1: Logistic Regression
+
+In a classification model, one would model the conditional probability $p(x)=Pr(Y = 1|X = x)$ as a function of x. One way to look at the probability is to let p(x) be a linear function of x, which is the base behind logistic regression. Logistic regression is a specific case of linear regression models where it is used to model the probability of a class or event existing ^3^. In this dataset, the response  variable (default payment (Yes = 1, No = 0)), is a binary variable; therefore, the binary logistic model would be used for the analysis. The logistic regression model is 
+
+\begin{equation}
+\tag{1}
+p(x)=\displaystyle \frac{e^{\beta x}}{ 1+ e^{\beta x}}
+\end{equation}
+
+
+The advantage of this model is that it can produce a simple probabilistic formula of classification, and its disadvantage is that logistic regression cannot deal with non-linear and interactive effects of explanatory variables ^2^.    
+
+
+##### Method2: Linear and Quadratic Discriminant Analysis (LDA & QDA)
+Suppose we want to classify an observation into K classes. Let pik defines a prior probability that 
+a randomly chosen observation belong to kth class, also let ,according to bayes theorem 
+4.10. $Pr(Y=k|X=x)=\frac{\pi_kf_k(x)}{\sum_{l=1}^{K}\pi_lf_l(x)}$ (1)  
+We can express a p dimensional random variable x has multivariate gaussian distribution ,we write x 
+$X$~$N(\mu,\Sigma)$, the gaussian density is defined as (2).  $\frac{1}{(2\pi)^{p/2}det(\Sigma)^{1/2}}$exp$({-\frac{1}{2}(x-\mu)^T\Sigma^{-1}(x-\mu)})$ (2)  
+and we can plug (2) into (1) and we can get the bayes classifier for an observation x is (3).  
+$\delta_k(x)=x^T\Sigma^{-1}\mu_k-\frac{1}{2}\mu^T_k\Sigma^{-1}\mu_k+log\pi_k$ (3) 
+values x for which $\delta_k(x)=\delta_l(x)$;i.e.  
+$x^T\Sigma^{-1}\mu_k-\frac{1}{2}\mu_k^T\Sigma^{-1}\mu_k=x^T\Sigma^{-1}\mu_l-\frac{1}{2}\mu_l^T\Sigma^{-1}\mu_l$(4)  
+#LDA on full model
+```{r}
+lda_fit = lda(dpnm~.,train)
+pred_lda = factor(predict(lda_fit,x_test)$class,levels = c("1","0"))
+confusionMatrix(pred_lda, factor(y_test,levels = c("1","0")), positive = NULL)
+
+```
+from the lda, we can see that the overall accuracy is 0.8197. which is pretty much decent. however the sensitivity is only 0.36695. which means only 36% of default cases are detected by lda. in the contrast of its high specificity. nearly 94% of non-default cases are detected.
+#LDA on selected model
+```{r}
+lda_fit_select = lda(dpnm~LIMIT_BAL+MARRIAGE+PAY_1+PAY_2+PAY_3+PAY_4+PAY_5+BILL_AMT1+PAY_AMT1,train)
+pred_lda_select = factor(predict(lda_fit_select,x_test)$class,levels = c("1","0"))
+confusionMatrix(pred_lda_select, factor(y_test,levels = c("1","0")), positive = NULL)
+
+```
+from the lda method toward selected model, we can see that the overall accuracy is 0.8202. which is slightly better than full model. and sensitivity and specificity are 0.3701 and 0.9433,which are also close to full model's sensitivity and specificity. we can say that the selected model has similiar performance with full mo del.
+
+#QDA on full model
+For the qda we have $X$~$N(\mu_k,\Sigma_k)$ the $\Sigma_k$ is covariate matrix
+For the kth class. And based on this, the bayes classifier for observations X =x to the class k is 
+$\delta_k(x)=-\frac{1}{2}(x-\mu_k)^T\Sigma_k^{-1}(x-\mu_k)-\frac{1}{2}log|\Sigma_k|+log\pi_k$  
+$=-\frac{1}{2}x^T\Sigma_k^{-1}x+x^T\Sigma_k^{-1}\mu_k-\frac{1}{2}\mu_k^T\Sigma_k^{-1}\mu_k-\frac{1}{2}log|\Sigma_k|+log\pi_k$  
+
+for qda, we first fit it on full model using below code.
+qda_fit = qda(dpnm~.,train)
+pred_qda = factor(predict(qda_fit,x_test)$class,levels = c("1","0"))
+confusionMatrix(pred_qda, factor(y_test,levels = c("1","0")), positive = NULL)
+however, it return the rank deficiency error, which means we don't have enough data points to estimate all
+varibles.It also means that there is still some collinearity there.
+so let's try to fit with less variables in reduced model.
+#QDA on selected model
+```{r}
+qda_fit_se = qda(dpnm~LIMIT_BAL+MARRIAGE+PAY_1+PAY_2+PAY_3+PAY_4+PAY_5+BILL_AMT1+PAY_AMT1,train)
+pred_qda_se = factor(predict(qda_fit_se,x_test)$class,levels = c("1","0"))
+confusionMatrix(pred_qda_se, factor(y_test,levels = c("1","0")), positive = NULL)
+```
+Our QDA on selected model worked, the overall accuracy is 0.77.which is little lower than LDA, however, the sensitivity is  0.58, which is 20% percentage higher than the lda. which means 58% of default cases are detected by qda. it's specificity is almost 82%,that means 82% of non-default cases are detected. compared to LDA, the QDA impose a more strict rule to decide if the credit card default.
+
+##### Method3: Deep Learning Model
+
+Deep Learning is a technique for an approach to artificial intelligence called neural networks. It is also a subset of machine learning, where a computer learns to perform required tasks by analyzing training data. After going over the entire dataset many times, it would find patterns that consistently correlate with input variables/labels.
+Most of the neural nets are organized into layers of nodes; one node might have several nodes connected, data passes through the succeeding layers with weights applied during this process, after receiving all kinds of transformations like complex multiplication and additives, it arrives at the output layer. 
+It is worth mentioning that the weights applied are adjusted to ﬁnd patterns in order to make better predictions, users do not need to specify what patterns to look for — the neural network learns on its own.
+For this part of the analysis, we decided to use Keras-a user-friendly neural network library written in Python to complete the task.
+
+
+##### Method 4: Support Vector Machine (SVM)
+	
+SVM is a machine learning algorithm used to classify categorical data (binary data will only be considered in this paper). Given a labeled training set, SVM defines a hyperplane that best separates the data according to their classes. Classifications are then determined by where data points lie in relation to the hyperplane. Consider, for example, the following plot consisting of two classes, blue circle and red square.
+
+\begin{figure}
+\begin{center}
+  \includegraphics[width=5.5cm,height=5.5cm]{/Users/user/Desktop/Fourth Year/SS 4850/Final Project/pic1.png}
+  \caption{Plot of sample data with various separators}
+  \label{}
+\end{center}
+\end{figure}
+
+As shown by the green lines, there are many ways to construct a classifier that separates the classes. The optimal classifier maximizes the distance between the classes or, in other words, produces the maximum margin. 
+
+\begin{figure}
+\begin{center}
+  \includegraphics[width=5.5cm,height=5.5cm]{/Users/user/Desktop/Fourth Year/SS 4850/Final Project/pic2.png}
+  \caption{Plot of sample data with optimal hyperplane}
+  \label{}
+\end{center}
+\end{figure}
+
+  The optimal classifier is an $N - 1$ dimensional hyperplane, where N denotes the number of features. In the above example, data points that lie to the upper right of the hyperplane are classified as blue circles while data points that lie to the bottom left of it are classified as red squares. 
+  The disposition of the hyperplane is influenced most by the closest data points. These data points, which are called the support vectors, delineate the classes and help determine the margin to be maximized. In the above example, the support vectors lie on the dashed lines. Mathematically, this can be interpreted as follows.
+	Let $x$ denote a matrix of features, $y \in {-1, 1}$ denote a vector of binary responses, and $w$ & $b$ denote two parameters (vector and scalar, respectively). The $i^{th}$ response is then determined as $y_{i} = 1$ if $w^{T}x_{i} + b \ge 1$ otherwise, $y_{i} = -1$ if $w^{T}x_{i} \le -1$. This can be rewritten as $y_i(w^{T}x_{i} + b) \ge 1$. 
+SVM maximizes the distance between the two classes and mathematically, this translates to maximizing the distance between $w^{T}x_{i} + b = 1$ and $w^{T}x_{i} + b = -1$. The distance between these two hyperlanes is $\frac{2}{||w||}$, where $||.||$ denotes the 1-norm of the argument. To maximize this margin, we solve $\max\limits_{w} \frac{2}{||w||}$, or equivalently $\min\limits_{w} \frac{||w||}{2}$. Also note that we’d like SVM to correctly classify all data points or equivalently, satisfy $y_{i}(w^{T}x_{i} + b) \ge 1 \forall i \in {1, …, N}$. Consequently, the optimal hyperplane is obtained by solving $$\min\limits_{w} \frac{||w||}{2} \\ s.t. ~~~ y_{i}(w^{T}x_{i} + b) \ge 1 ~~~ \forall i \in \{1, …, N\}$$
+	SVM is advantageous because it focuses on data points that are closest to the decision boundary. These points are used to construct the separating hyperplane while points that are far from the boundary have little to no influence. The intuition here is that if this model can classify the most difficult data points (ones that are near the boundary), then it should be fairly good at classifying the easier data points (ones that are far from the boundary).
+
+
+
+
+
+## Data Analysis
+
+#### Section 2: Model Selection Method
+
+From the result above, we used the selected variables to run different modeling methods. We used the training data set to generate the models; then, we tested how well it is at predicting the classes using the testing data set.  When LR was tested, it found to have an accuracy of 81.82%.
+
+
+```{r, warning=FALSE, include=FALSE}
+# full model 
+glm.fit = glm( dpnm~., data = train, family = "binomial")
+
+
+glm.probs = predict(glm.fit, test, type="response")
+glm.probs <- ifelse(glm.probs > 0.5,1,0)
+# Confusion Matrix
+CM1 = table(test$dpnm,glm.probs); CM1
+mean(glm.probs == test$dpnm)
+
+# selected model 
+glm.fit2 = glm(dpnm ~ LIMIT_BAL + MARRIAGE + PAY_1 + PAY_2 + PAY_3 + PAY_5 + BILL_AMT1 + PAY_AMT1, data = train, family = "binomial")
+summary(glm.fit2)
+
+glm.probs2 = predict(glm.fit2, test, type="response")
+glm.probs2 <- ifelse(glm.probs2 > 0.5,1,0)
+# Confusion Matrix
+CM1 = table(test$dpnm,glm.probs2); CM1
+mean(glm.probs2 == test$dpnm)
+
+```
+
+Now we are going to build a Deep Learning Model using a Kera based neural network for predicting default of credit card clients.  
+In this method, we set the number of epochs to 100, which means it will go through the entire dataset 100 times. We deﬁne a fully-connected network structure with three layers in Keras. The ﬁrst hidden layer has 8 nodes and uses the relu activation function. The second hidden layer has five nodes and uses the relu activation function, and then the output layer has one node with the sigmoid activation function. The activation function determines the output a node will generate, based upon its input.  
+Next, we compile the model, and the best way to represent the network for training and making predictions to run on our hardware is automatically chosen by the backend. We will deﬁne the optimizer as the effective stochastic gradient descent algorithm adam, this algorithm tunes itself and gives good results in a wide range of problems.  
+Finally, because this is a classiﬁcation problem, we will collect and report the classiﬁcation accuracy, deﬁned via the metrics argument.  
+Move on to the ﬁtting of Keras Model. We want to train the model many times until it learns a good enough mapping of rows of input data to the output classiﬁcation. Finally, we can evaluate the performance of the network on the testing dataset. Just like a black box, this method will only give us an idea of how well we have modeled the dataset and provide predictions, but not of how exactly the model made the predictions.
+Through the Keras Model, we can get an accuracy of 78.5%.
+```{r echo=FALSE}
+#prep data for deep learning
+selectV=c("LIMIT_BAL","MARRIAGE","PAY_1","PAY_2","PAY_3","PAY_5" ,"BILL_AMT1","PAY_AMT1")
+x_deep_test=as.data.frame(subset(x_test,select=selectV))
+x_deep_train=as.data.frame(subset(x_train,select=selectV))
+y_deep_train=as.data.frame(y_train)
+y_deep_test=as.data.frame(y_test)
+```
+
+
+
+
+  Now, the SVM algorithm is run on a reduced dataset obtained from lasso regression and stepwise selection. A model is trained on a training set and predictions are made on a seperate test set. The following confusion table summarizes the prediction results, where “1” represents a client defaulting and “0” represents the converse.
+
+```{r, include = FALSE}
+#clients = read.csv("C:/Users/user/Desktop/Fourth Year/SS 4850/Final Project/default of credit card #clients.csv")
+clients = read_csv("default of credit card clients.csv")
+
+df = clients[,-1] #first let us get rid of "ID" column
+
+#lasso method
+set.seed(111)
+y = df$dpnm
+x = model.matrix(dpnm ~ ., df)
+cv.out = cv.glmnet(x, y, alpha = 1, family = "binomial", type.measure = "deviance")
+
+lambda_min = cv.out$lambda.min
+lambda_1se = cv.out$lambda.1se
+var = coef(cv.out, s = lambda_1se)
+
+x = var[-c(1,2)] 
+i = which(x == 0)
+
+#reduced dataset
+data = df[,-i] 
+data = data[,-which(colnames(data) == "PAY_4")]
+
+
+
+#support vector machine
+mod = svm(as.factor(dpnm) ~ ., data = train, kernel = "radial")
+
+#performance measures
+library(caret)
+conf = confusionMatrix(predict(mod, test), as.factor(test$dpnm), positive = "1")
+t = conf$table
+```
+```{r, echo = FALSE}
+t
+```
+
+  The SVM model achieves an accuracy of 81.48%, a sensitivity of 0.338, a specificity of 0.948, and an F-measure of 0.444. The most notable metric is the specificity (0.948). This measure tells us the model is very proficient at accurately predicting reputable clients (i.e. responses classified as 0 will largely be predicted as 0). 
+  In spite of this, it is reasonable to assume that a lending institution is more interested in correctly classifying risky customers than safe customers. It is, after all, the risky customers that can potentially default on their loans. In this sense, the model does not perform very well as it achieves a low sensitivity (0.338). This measure tells us the model inadequately predicts risky customers (i.e. responses classified as 1 will not always be predicted as 1). 
+  The sensitivity drawback is also represented in the F-measure (0.444). The model’s high specificity and low sensitivity translate into a mediocre F-measure. Since this metric provides a general summary of the model, we can conclude that while the SVM fit isn’t perfect, it does provide an added benefit in estimating customer credit risk. 
+
+
